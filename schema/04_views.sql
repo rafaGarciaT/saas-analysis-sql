@@ -79,22 +79,34 @@ ai_cost AS (
         c.month_ref,
         c.estimated_ai_cost
     FROM vw_monthly_ai_cost_by_user c
+),
+all_user_months AS (
+    SELECT user_account_id, month_ref FROM sub_revenue
+    UNION
+    SELECT user_account_id, month_ref FROM ad_revenue
+    UNION
+    SELECT user_account_id, month_ref FROM ai_cost
 )
 SELECT
-    ua.user_account_id,
-    COALESCE(sr.month_ref, ar.month_ref, ac.month_ref) AS month_ref,
+    a.user_account_id,
+    a.month_ref,
     COALESCE(sr.subscription_revenue, 0) AS subscription_revenue,
     COALESCE(ar.estimated_ad_revenue, 0) AS estimated_ad_revenue,
     COALESCE(ac.estimated_ai_cost, 0) AS estimated_ai_cost,
     0.10::numeric AS baseline_cost,
     (
-      COALESCE(sr.subscription_revenue, 0)
-      + COALESCE(ar.estimated_ad_revenue, 0)
-      - COALESCE(ac.estimated_ai_cost, 0)
-      - 0.10
+        COALESCE(sr.subscription_revenue, 0)
+        + COALESCE(ar.estimated_ad_revenue, 0)
+        - COALESCE(ac.estimated_ai_cost, 0)
+        - 0.10
     )::numeric(12, 4) AS estimated_profit
-FROM user_account ua
-LEFT JOIN sub_revenue sr ON sr.user_account_id = ua.user_account_id
-LEFT JOIN ad_revenue ar ON ar.user_account_id = ua.user_account_id AND ar.month_ref = sr.month_ref
-LEFT JOIN ai_cost ac ON ac.user_account_id = ua.user_account_id
-    AND ac.month_ref = COALESCE(sr.month_ref, ar.month_ref);
+FROM all_user_months a
+LEFT JOIN sub_revenue sr
+    ON sr.user_account_id = a.user_account_id
+   AND sr.month_ref = a.month_ref
+LEFT JOIN ad_revenue ar
+    ON ar.user_account_id = a.user_account_id
+   AND ar.month_ref = a.month_ref
+LEFT JOIN ai_cost ac
+    ON ac.user_account_id = a.user_account_id
+   AND ac.month_ref = a.month_ref;
